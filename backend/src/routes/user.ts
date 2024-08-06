@@ -27,8 +27,8 @@ userRouter.post("/", async (req: express.Request, res: express.Response) => {
                 'name: $name, ' +
                 'email: $email,' +
                 'dpUrl: $dpUrl,' +
-                'joinDate: date()' +
-                'created: datetime()',
+                'joinDate: date(),' +
+                'created: datetime()})',
                 userBody)
             res.status(200).json({message: "user created", user: user.records[0]});
         }

@@ -31,8 +31,8 @@ userRouter.post("/", (req, res) => __awaiter(void 0, void 0, void 0, function* (
                 'name: $name, ' +
                 'email: $email,' +
                 'dpUrl: $dpUrl,' +
-                'joinDate: date()' +
-                'created: datetime()', userBody);
+                'joinDate: date(),' +
+                'created: datetime()})', userBody);
             res.status(200).json({ message: "user created", user: user.records[0] });
         }
         else {
