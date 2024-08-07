@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
 
 
-const JWT_SECRET = "Chandu ke chacha ne chandu ki chachi ko chandi ke chammach se chatni chatayi";
+const JWT_SECRET = "";
 
 const app = express();
 app.use(express.json());
