@@ -2,9 +2,10 @@ import express from "express";
 import driver from "../db/init";
 import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
+import dotenv from 'dotenv';
+dotenv.config();
 
-
-const JWT_SECRET = "Chandu ke chacha ne chandu ki chachi ko chandi ke chammach se chatni chatayi";
+const JWT_SECRET: string = process.env.JWT_SECRET || "default_jwt_secret";
 
 const app = express();
 app.use(express.json());
