@@ -1,9 +1,17 @@
 import express from "express";
 import driver from "../db/init";
+import jwt from "jsonwebtoken";
+import cookieParser from "cookie-parser";
+
+
+const JWT_SECRET = "Chandu ke chacha ne chandu ki chachi ko chandi ke chammach se chatni chatayi";
 
 const app = express();
 app.use(express.json());
+app.use(cookieParser());
 const userRouter = express.Router();
+
+
 
 interface InitialSignupRequestType {
     userId: string,
@@ -11,7 +19,7 @@ interface InitialSignupRequestType {
     email: string,
     dpUrl: string,
 }
-userRouter.post("/", async (req: express.Request, res: express.Response) => {
+userRouter.post("/signin", async (req: express.Request, res: express.Response) => {
     const userBody:InitialSignupRequestType = req.body;
     const session = driver.session();
     const userId:string = userBody.userId;
@@ -28,12 +36,20 @@ userRouter.post("/", async (req: express.Request, res: express.Response) => {
                 'email: $email,' +
                 'dpUrl: $dpUrl,' +
                 'joinDate: date(),' +
-                'created: datetime()})',
+                'created: datetime(),' +
+                'bio: "",' +
+                'location: "",' +
+                'followerCount: 0,' +
+                'followingCount: 0})',
                 userBody)
-            res.status(200).json({message: "user created", user: user.records[0]});
+            const token:string = jwt.sign(user.records[0].get('user').properties, JWT_SECRET);
+            res.cookie('user', token);
+            res.status(200).json({message: "user created", user: user.records[0].get('user').properties});
         }
         else{
-            res.status(200).json({message: "user already existed", user: userExists.records[0]});
+            const token:string = jwt.sign(userExists.records[0].get('user').properties, JWT_SECRET);
+            res.cookie('user', token);
+            res.status(200).json({message: "user already existed", user: userExists.records[0].get('user').properties});
         }
     }
     catch(err){
@@ -47,6 +63,20 @@ userRouter.post("/", async (req: express.Request, res: express.Response) => {
     }
 })
 
-userRouter.put("/login", (req: express.Request, res: express.Response) => {})
+// userRouter.put("/update", async (req: express.Request, res: express.Response) => {
+//     // const session = driver.session();
+//     const cookie = req.cookies;
+//     try{
+//         const decodedCookie = jwt.verify(cookie.user, JWT_SECRET);
+//         res.send(decodedCookie);
+//
+//     }
+//     catch (e){
+//         res.status(411).json({
+//             e,
+//             message: "wrong cookie"
+//         })
+//     }
+// })
 
 export default userRouter;

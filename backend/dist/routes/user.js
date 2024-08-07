@@ -14,10 +14,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const init_1 = __importDefault(require("../db/init"));
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const cookie_parser_1 = __importDefault(require("cookie-parser"));
+const JWT_SECRET = "Chandu ke chacha ne chandu ki chachi ko chandi ke chammach se chatni chatayi";
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
+app.use((0, cookie_parser_1.default)());
 const userRouter = express_1.default.Router();
-userRouter.post("/", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+userRouter.post("/signin", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const userBody = req.body;
     const session = init_1.default.session();
     const userId = userBody.userId;
@@ -32,11 +36,19 @@ userRouter.post("/", (req, res) => __awaiter(void 0, void 0, void 0, function* (
                 'email: $email,' +
                 'dpUrl: $dpUrl,' +
                 'joinDate: date(),' +
-                'created: datetime()})', userBody);
-            res.status(200).json({ message: "user created", user: user.records[0] });
+                'created: datetime(),' +
+                'bio: "",' +
+                'location: "",' +
+                'followerCount: 0,' +
+                'followingCount: 0})', userBody);
+            const token = jsonwebtoken_1.default.sign(user.records[0].get('user').properties, JWT_SECRET);
+            res.cookie('user', token);
+            res.status(200).json({ message: "user created", user: userExists.records[0].get('user').properties });
         }
         else {
-            res.status(200).json({ message: "user already existed", user: userExists.records[0] });
+            const token = jsonwebtoken_1.default.sign(userExists.records[0].get('user').properties, JWT_SECRET);
+            res.cookie('user', token);
+            res.status(200).json({ message: "user already existed", user: userExists.records[0].get('user').properties });
         }
     }
     catch (err) {
@@ -49,5 +61,19 @@ userRouter.post("/", (req, res) => __awaiter(void 0, void 0, void 0, function* (
         yield session.close();
     }
 }));
-userRouter.put("/login", (req, res) => { });
+// userRouter.put("/update", async (req: express.Request, res: express.Response) => {
+//     // const session = driver.session();
+//     const cookie = req.cookies;
+//     try{
+//         const decodedCookie = jwt.verify(cookie.user, JWT_SECRET);
+//         res.send(decodedCookie);
+//
+//     }
+//     catch (e){
+//         res.status(411).json({
+//             e,
+//             message: "wrong cookie"
+//         })
+//     }
+// })
 exports.default = userRouter;

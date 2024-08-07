@@ -1,10 +1,15 @@
 import express from "express";
 import userRouter from "./routes/user";
-const app = express();
+import cookieParser from "cookie-parser";
+import updateRouter from "./routes/update";
 
+
+const app = express();
+app.use(cookieParser());
 
 app.use(express.json());
-app.use("/signin", userRouter);
+app.use("/user", userRouter);
+app.use("/update", updateRouter);
 
 
 app.get("/", (req: express.Request, res: express.Response) => {
