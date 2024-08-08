@@ -192,20 +192,19 @@ userRouter.get("/:userId", async (req: express.Request, res: express.Response)=>
 
     try{
 
-        const allPosts = await session.run('MATCH (user:User {userId: $userId})-[r:POSTED]->(target)' +
-            'RETURN collect(target) as authoredPosts', userId);
-        const authoredPosts = allPosts.records[0].get('authoredPosts').properties;
-
-        const allCommentedPosts = await session.run('MATCH (user:User {userId: $userId})-[r:COMMENTED]->(comment)' +
+        const userInfo = await session.run('MATCH (user:User {userId: $userId})-[posted:POSTED]->(post)' +
+            'MATCH (user)-[commented:COMMENTED]->(comment)' +
             'MATCH (comment)-[:PARENT]->(parent)' +
-            'RETURN collect({comment:comment, parentPost: parent}) as commentedPosts', userId);
-        const commentedPosts = allCommentedPosts.records[0].get('commentedPosts').properties;
+            'MATCH (user)-[liked:LIKED]->(likePost)' +
+            'RETURN {' +
+            'user: user,' +
+            'authoredPosts: collect(post),' +
+            'commentInfo: collect({comment: comment, parent: parent}),' +
+            'likedPosts: collect(likePost)' +
+            '} AS userInfo', userId);
 
-        const allLikedPosts = await session.run('MATCH (user:User {userId: $userId})-[r:LIKED]->(target)' +
-            'RETURN collect(target) as likedPosts', userId);
-        const likedPosts = allLikedPosts.records[0].get('likedPosts').properties;
-
-        res.status(200).json({authoredPosts, commentedPosts, likedPosts});
+        const finalPayload = userInfo.records[0].get('authoredPosts').properties;
+        res.status(200).json({finalPayload});
     }
     catch(error){
         console.log(error);
