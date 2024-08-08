@@ -48,7 +48,8 @@ postsRouter.post("/", async (req: express.Request, res: express.Response) => {
 
             await session.run('MATCH (user: User {userId: $userId})' +
                 'MATCH (post: Posts {postId: $postId})' +
-                'MERGE (user)-[:POSTED]->(post)', { userId, postId } );
+                'MERGE (user)-[r:POSTED]->(post)' +
+                'SET r.time = datetime()', { userId, postId } );
 
             res.status(200).json({message: "post created", user: post.records[0].get('post').properties});
         }
