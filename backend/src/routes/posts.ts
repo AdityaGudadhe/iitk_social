@@ -46,10 +46,24 @@ postsRouter.post("/", async (req: express.Request, res: express.Response) => {
                 'likeCount: 0,' +
                 'commentCount: 0})', {postId, postBody});
 
-            await session.run('MATCH (user: User {userId: $userId})' +
-                'MATCH (post: Posts {postId: $postId})' +
-                'MERGE (user)-[r:POSTED]->(post)' +
-                'SET r.time = datetime()', { userId, postId } );
+            const parentId = postBody.parentId;
+            if(parentId){
+                await session.run('MATCH (parent:Posts {postId: $parentId})' +
+                    'MATCH (comment: Posts {postId: $postId})' +
+                    'MERGE (comment)-[r:PARENT]->(post)' +
+                    'SET r.time = datetime()', {parentId, postId})
+
+                await session.run('MATCH (user: User {userId: $userId})' +
+                    'MATCH (post: Posts {postId: $postId})' +
+                    'MERGE (user)-[r:COMMENTED]->(post)' +
+                    'SET r.time = datetime()', { userId, postId } );
+            }
+            else{
+                await session.run('MATCH (user: User {userId: $userId})' +
+                    'MATCH (post: Posts {postId: $postId})' +
+                    'MERGE (user)-[r:POSTED]->(post)' +
+                    'SET r.time = datetime()', {userId, postId});
+            }
 
             res.status(200).json({message: "post created", user: post.records[0].get('post').properties});
         }

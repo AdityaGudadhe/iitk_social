@@ -13,7 +13,11 @@ app.use(express.json());
 app.use(cookieParser());
 const userRouter = express.Router();
 
-
+interface finalProfilePayloadType{
+    posts: object[],
+    comments: object[],
+    likes: object[]
+}
 
 interface InitialSignupRequestType {
     userId: string,
@@ -182,20 +186,34 @@ userRouter.put("/follow/:userId", async(req: express.Request, res: express.Respo
     }
 })
 
-// userRouter.put("/update", async (req: express.Request, res: express.Response) => {
-//     // const session = driver.session();
-//     const cookie = req.cookies;
-//     try{
-//         const decodedCookie = jwt.verify(cookie.user, JWT_SECRET);
-//         res.send(decodedCookie);
-//
-//     }
-//     catch (e){
-//         res.status(411).json({
-//             e,
-//             message: "wrong cookie"
-//         })
-//     }
-// })
+userRouter.get("/:userId", async (req: express.Request, res: express.Response)=>{
+    const session = driver.session();
+    const userId:string = req.params.userId;
+
+    try{
+
+        const allPosts = await session.run('MATCH (user:User {userId: $userId})-[r:POSTED]->(target)' +
+            'RETURN collect(target) as authoredPosts', userId);
+        const authoredPosts = allPosts.records[0].get('authoredPosts').properties;
+
+        const allCommentedPosts = await session.run('MATCH (user:User {userId: $userId})-[r:COMMENTED]->(comment)' +
+            'MATCH (comment)-[:PARENT]->(parent)' +
+            'RETURN collect({comment:comment, parentPost: parent}) as commentedPosts', userId);
+        const commentedPosts = allCommentedPosts.records[0].get('commentedPosts').properties;
+
+        const allLikedPosts = await session.run('MATCH (user:User {userId: $userId})-[r:LIKED]->(target)' +
+            'RETURN collect(target) as likedPosts', userId);
+        const likedPosts = allLikedPosts.records[0].get('likedPosts').properties;
+
+        res.status(200).json({authoredPosts, commentedPosts, likedPosts});
+    }
+    catch(error){
+        console.log(error);
+        res.status(411).json({message:"Error getting profile information", error});
+    }
+    finally{
+        await session.close();
+    }
+})
 
 export default userRouter;
