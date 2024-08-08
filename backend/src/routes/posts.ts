@@ -50,8 +50,11 @@ postsRouter.post("/", async (req: express.Request, res: express.Response) => {
             if(parentId){
                 await session.run('MATCH (parent:Posts {postId: $parentId})' +
                     'MATCH (comment: Posts {postId: $postId})' +
-                    'MERGE (comment)-[r:PARENT]->(post)' +
-                    'SET r.time = datetime()', {parentId, postId})
+                    'MERGE (comment)-[p:PARENT]->(parent)' +
+                    'MERGE (parent)-[c:COMMENT]->(comment)' +
+                    'SET p.time = datetime()' +
+                    'SET c.time = datetime()' +
+                    'SET parent.commentCount = coalesce(parent.commentCount,0) + 1', {parentId, postId})
 
                 await session.run('MATCH (user: User {userId: $userId})' +
                     'MATCH (post: Posts {postId: $postId})' +
@@ -104,4 +107,24 @@ postsRouter.put("/edit/:postId", async (req: express.Request, res: express.Respo
     }
 })
 
+postsRouter.get("/:postId", async (req:express.Request, res: express.Response)=>{
+    const session = driver.session();
+    const postId = req.params.postId;
+
+    try{
+        const postInfo = await session.run('MATCH (post:Posts {postId:$postId})' +
+            'MATCH (post)-[c:COMMENT]->(comment)' +
+            'RETURN { post: post,' +
+            'comments: collect(comment) } as postInfo', postId);
+
+        res.status(200).json(postInfo.records[0].get('postInfo').properties);
+    }
+    catch (error){
+        console.log(error);
+        res.status(411).json({message:"error getting posts"});
+    }
+    finally{
+        await session.close();
+    }
+})
 export default postsRouter;
