@@ -3,8 +3,7 @@ import driver from "../db/init";
 import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
 import dotenv from 'dotenv';
-import multer from "multer";
-import path from "path";
+import {upload} from "../utils/utils"
 import {cloudinary, defaultDpUrl} from "../config/cloudinary";
 import fs from "fs";
 dotenv.config();
@@ -20,23 +19,13 @@ interface updateInfoType{
     infoType: "bio" | "name" | "location",
     info: string
 }
+interface commInitialInputBodyType{
+    name: string,
+    bio: string | null
+}
+type commPostPermissionsType = "anyone" | "admin-only";
 
-const storage = multer.diskStorage({
-    destination: (req:express.Request, file, callback)=>{
-        const uploadPath: string = path.join(__dirname, "./uploads/")
-        callback(null, uploadPath);
-    },
-
-    filename: (req:express.Request, file, callback)=>{
-        const sanitizedFilename:string = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const uniqueSuffix:string = Date.now().toString() + '-' + Math.round(Math.random() * 1e9).toString();
-        callback(null, file.fieldname + '-' + uniqueSuffix + path.extname(sanitizedFilename));
-    }
-})
-
-const upload = multer({storage});
-
-updateRouter.put("/", async (req: express.Request, res: express.Response) => {
+updateRouter.put("/user/content", async (req: express.Request, res: express.Response) => {
     const session = driver.session();
     const body:updateInfoType = req.body;
     const { info, infoType} = body;
@@ -69,7 +58,7 @@ updateRouter.put("/", async (req: express.Request, res: express.Response) => {
     }
 })
 
-updateRouter.put("/dpurl", upload.single('files'), async (req: express.Request, res: express.Response) => {
+updateRouter.put("/user/dpurl", upload.single('files'), async (req: express.Request, res: express.Response) => {
     const session = driver.session();
     let newDpUrl:string = defaultDpUrl;
     if(req.file){
@@ -105,5 +94,52 @@ updateRouter.put("/dpurl", upload.single('files'), async (req: express.Request, 
         await session.close();
     }
 })
+
+updateRouter.put('/community/dpUrl/:communityId', upload.single('files'), async (req: express.Request, res: express.Response)=>{
+    const session = driver.session();
+    const communityId: string = req.params.groupId;
+    let newDpUrl:string = defaultDpUrl;
+    if(req.file){
+        const filePath = req.file.path;
+        const result = await cloudinary.uploader.upload(filePath, {
+            resource_type: "auto"
+        })
+        newDpUrl = result.url;
+        fs.unlinkSync(filePath);
+    }
+
+    try{
+        const updatedProfile = await session.run('MATCH (comm: Community {communityId: $communityId})' +
+            'SET comm.dpUrl = $newDpUrl ' +
+            'RETURN comm', {communityId, newDpUrl});
+
+        res.status(200).json({message: "dp updated successfully.", user: updatedProfile.records[0].get('comm').properties});
+    }
+    catch(error){
+        console.log(error);
+        res.status(411).json({message: "error updating dp"});
+    }
+});
+updateRouter.put('/community/content/:communityId', async (req: express.Request, res: express.Response) => {
+    const session = driver.session();
+    const content: commInitialInputBodyType = req.body;
+    const communityId: string = req.body.communityId;
+    try{
+        const updateInfo = await session.run('MATCH (comm:Community {communityId: $communityId})' +
+            'SET comm.name = $name,' +
+            'comm.bio = $bio '+
+            'RETURN comm',
+            {communityId, content});
+
+        res.status(200).json({message: "bio updated successfully.", user: updateInfo.records[0].get('comm').properties});
+    }
+    catch (e){
+        console.log(e);
+        res.status(411).json(e);
+    }
+    finally {
+        await session.close();
+    }
+});
 
 export default updateRouter;

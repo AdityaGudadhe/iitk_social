@@ -2,6 +2,9 @@ import express from "express";
 import {Session} from "neo4j-driver";
 import {cloudinary} from "../config/cloudinary";
 import fs from "fs";
+import multer from "multer";
+import path from "path";
+import {v4 as uuidv4} from "uuid";
 
 export async function verifyPostExist(postId: string, res: express.Response, session: Session): Promise<void> {
     try{
@@ -16,6 +19,22 @@ export async function verifyPostExist(postId: string, res: express.Response, ses
         res.status(401).json({message: "Post with postId doesnt exist"});
     }
 }
+
+const storage = multer.diskStorage({
+    destination: (req:express.Request, file, callback)=>{
+        const uploadPath: string = path.join(__dirname, "./uploads/")
+        callback(null, uploadPath);
+    },
+
+    filename: (req:express.Request, file, callback)=>{
+        const sanitizedFilename:string = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const uniqueSuffix:string = Date.now().toString() + '-' + Math.round(Math.random() * 1e9).toString();
+        callback(null, file.fieldname + '-' + uniqueSuffix + path.extname(sanitizedFilename));
+    }
+})
+
+
+export const upload = multer({storage});
 
 export async function createUploads(req: express.Request, res: express.Response){
     const files: Express.Multer.File[] | {[p: string]: Express.Multer.File[]} | undefined = req.files;
@@ -61,3 +80,8 @@ export async function createUploads(req: express.Request, res: express.Response)
     }
     return uploadResults;
 }
+
+export function makeUniqueString(){
+    return Date.now().toString() + uuidv4() + Math.round(Math.random()*1e9).toString();
+}
+

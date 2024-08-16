@@ -1,15 +1,11 @@
 import express from "express";
 import driver from "../db/init";
 import jwt from "jsonwebtoken";
-import path from "path";
 import cookieParser from "cookie-parser";
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
-import fs from "fs";
-import multer from "multer";
+import {makeUniqueString, upload} from "../utils/utils";
 import { createUploads } from "../utils/utils";
-import {cloudinary} from "../config/cloudinary";
-import {verifyPostExist} from "../utils/utils";
 dotenv.config();
 
 const app = express();
@@ -18,22 +14,6 @@ app.use(cookieParser());
 const postsRouter = express.Router();
 
 const JWT_SECRET: string = process.env.JWT_SECRET || "default_jwt_secret";
-
-const storage = multer.diskStorage({
-    destination: (req:express.Request, file, callback)=>{
-        const uploadPath: string = path.join(__dirname, "./uploads/")
-        callback(null, uploadPath);
-    },
-
-    filename: (req:express.Request, file, callback)=>{
-        const sanitizedFilename:string = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const uniqueSuffix:string = Date.now().toString() + '-' + Math.round(Math.random() * 1e9).toString();
-        callback(null, file.fieldname + '-' + uniqueSuffix + path.extname(sanitizedFilename));
-    }
-})
-
-
-const upload = multer({storage});
 
 
 interface postsInputType{
@@ -59,7 +39,7 @@ postsRouter.post("/", upload.array('files', 10), async (req: express.Request, re
         const userId:string = decodedCookie.userId;
 
         try{
-            const postId:string = "post_" + Date.now().toString() + uuidv4() + Math.round(Math.random()*1e9).toString();
+            const postId:string = "post_" + makeUniqueString();
             const post = await session.run('CREATE(post:Posts {' +
                 'postId: $postId,' +
                 'groupId: $groupId,' +

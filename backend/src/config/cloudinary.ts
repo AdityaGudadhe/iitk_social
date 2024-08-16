@@ -10,5 +10,5 @@ cloudinary.config({
 });
 
 const defaultDpUrl:string = "https://res.cloudinary.com/ddw7tsdob/image/upload/v1722766820/samples/ecommerce/car-interior-design.jpg";
-
-export {cloudinary, defaultDpUrl};
+const defaultCommunityDpUrl: string = "https://res.cloudinary.com/ddw7tsdob/image/upload/v1723800017/Gustave_Dore___An_Angel_Leading_the_Crusaders_to_Jerusalem_date_unknown_Canvas_Gallery_Wrapped_or_Framed_Giclee_Wall_Art_Print_D6045_nnvzhi.jpg"
+export {cloudinary, defaultDpUrl, defaultCommunityDpUrl};
