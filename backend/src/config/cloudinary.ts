@@ -9,6 +9,6 @@ cloudinary.config({
     api_secret: '8U3gjzuNJUipoldprKiUDleI7dI'
 });
 
-const defaulDpUrl:string = "";
+const defaultDpUrl:string = "https://res.cloudinary.com/ddw7tsdob/image/upload/v1722766820/samples/ecommerce/car-interior-design.jpg";
 
-export {cloudinary, defaulDpUrl};
+export {cloudinary, defaultDpUrl};

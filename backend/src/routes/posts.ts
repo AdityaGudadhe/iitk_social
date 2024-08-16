@@ -7,14 +7,22 @@ import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import fs from "fs";
 import multer from "multer";
+import { createUploads } from "../utils/utils";
 import {cloudinary} from "../config/cloudinary";
+import {verifyPostExist} from "../utils/utils";
 dotenv.config();
+
+const app = express();
+app.use(express.json());
+app.use(cookieParser());
+const postsRouter = express.Router();
 
 const JWT_SECRET: string = process.env.JWT_SECRET || "default_jwt_secret";
 
 const storage = multer.diskStorage({
     destination: (req:express.Request, file, callback)=>{
-        callback(null, "./uploads/");
+        const uploadPath: string = path.join(__dirname, "./uploads/")
+        callback(null, uploadPath);
     },
 
     filename: (req:express.Request, file, callback)=>{
@@ -24,12 +32,9 @@ const storage = multer.diskStorage({
     }
 })
 
+
 const upload = multer({storage});
 
-const app = express();
-app.use(express.json());
-app.use(cookieParser());
-const postsRouter = express.Router();
 
 interface postsInputType{
     groupId: string | null,
@@ -41,47 +46,12 @@ interface postsEditType{
     body: string,
 }
 
-async function createUploads(files: Express.Multer.File[] | {[p: string]: Express.Multer.File[]} | undefined){
-    const uploadResults: object[] = [];
-    if(files){
-        if (Array.isArray(files)) {
-            for (const file of files) {
-                const filePath = file.path;
-                const result = await cloudinary.uploader.upload(filePath, {
-                    format: "auto",
-                    resource_type: "auto"
-                })
-
-                uploadResults.push(result);
-                fs.unlinkSync(filePath);
-            }
-        } else if (files && typeof files === 'object') {
-            for (const key in files) {
-                if (files.hasOwnProperty(key) && Array.isArray(files[key])) {
-                    for (const file of files[key]) {
-                        const filePath = file.path;
-                        const result = await cloudinary.uploader.upload(filePath, {
-                            format: "auto",
-                            resource_type: "auto"
-                        })
-
-                        uploadResults.push(result);
-                        fs.unlinkSync(filePath);
-                    }
-                }
-            }
-        }
-    }
-    return uploadResults;
-}
-
-
 postsRouter.post("/", upload.array('files', 10), async (req: express.Request, res: express.Response) => {
     const session = driver.session();
-    const postBody:postsInputType = req.body;
-    const uploadResults: object[]= await createUploads(req.files);
-
-    const fileContentInfo:object[] | null = uploadResults.length===0? null : uploadResults;
+    const body = req.body.text;
+    const postBody = JSON.parse(body);
+    const uploadResults: string[]= await createUploads(req, res);
+    const fileContentInfo:string[] | null = uploadResults.length===0? null : uploadResults;
 
     try{
         const decodedCookie = jwt.verify(req.cookies.user, JWT_SECRET);
@@ -89,9 +59,9 @@ postsRouter.post("/", upload.array('files', 10), async (req: express.Request, re
         const userId:string = decodedCookie.userId;
 
         try{
-            const postId:string = uuidv4();
+            const postId:string = "post_" + Date.now().toString() + uuidv4() + Math.round(Math.random()*1e9).toString();
             const post = await session.run('CREATE(post:Posts {' +
-                'postId: $postId' +
+                'postId: $postId,' +
                 'groupId: $groupId,' +
                 'parentId: $parentId,' +
                 'body: $body,' +
@@ -99,7 +69,13 @@ postsRouter.post("/", upload.array('files', 10), async (req: express.Request, re
                 'joinDate: date(),' +
                 'created: datetime(),' +
                 'likeCount: 0,' +
-                'commentCount: 0})', {postId, postBody, fileContentInfo});
+                'commentCount: 0})' +
+                'RETURN post', {
+                postId,
+                groupId: postBody.groupId || null,
+                parentId: postBody.parentId || null,
+                body: postBody.body,
+                 fileContentInfo});
 
             const parentId:string | null = postBody.parentId;
             if(parentId){
@@ -107,9 +83,9 @@ postsRouter.post("/", upload.array('files', 10), async (req: express.Request, re
                     'MATCH (comment: Posts {postId: $postId})' +
                     'MERGE (comment)-[p:PARENT]->(parent)' +
                     'MERGE (parent)-[c:COMMENT]->(comment)' +
-                    'SET p.time = datetime()' +
-                    'SET c.time = datetime()' +
-                    'SET parent.commentCount = coalesce(parent.commentCount,0) + 1', {parentId, postId})
+                    'SET p.time = datetime(),' +
+                    'c.time = datetime(),' +
+                    'parent.commentCount = parent.commentCount + 1', {parentId, postId})
 
                 await session.run('MATCH (user: User {userId: $userId})' +
                     'MATCH (post: Posts {postId: $postId})' +
@@ -143,12 +119,11 @@ postsRouter.post("/", upload.array('files', 10), async (req: express.Request, re
 postsRouter.put("/edit/content/:postId", async (req: express.Request, res: express.Response) => {
     const session = driver.session();
     const postId:string = req.params.postId;
-    const postBody:postsEditType = req.body.text;
+    const postBody:postsEditType = req.body.body;
 
     try{
         const post = await session.run('MATCH(post:Posts { postId: $postId })'+
-            'SET post.body = $body' +
-            'RETURN post', {postId, postBody});
+            'SET post.body = $body RETURN post', {postId, body: postBody});
 
         res.status(200).json({message: "post updated", user: post.records[0].get('post').properties});
     }
@@ -164,12 +139,12 @@ postsRouter.put("/edit/content/:postId", async (req: express.Request, res: expre
 postsRouter.put("/edit/images/add/:postId", upload.array('files', 10), async (req: express.Request, res: express.Response) => {
     const session = driver.session();
     const postId:string = req.params.postId;
-    const uploadResults: object[]= await createUploads(req.files);
-    const fileContentInfo:object[] | null = uploadResults.length===0? null : uploadResults;
+    const uploadResults: string[]= await createUploads(req, res);
+    const fileContentInfo:string[] | null = uploadResults.length===0? null : uploadResults;
 
     try{
         const post = await session.run('MATCH(post:Posts { postId: $postId })'+
-            'SET post.fileContentInfo += fileContentInfo' +
+            'SET post.fileContentInfo = COALESCE(post.fileContentInfo,[]) + $fileContentInfo ' +
             'RETURN post', {postId, fileContentInfo});
 
         res.status(200).json({message: "post updated", user: post.records[0].get('post').properties});
@@ -186,8 +161,6 @@ postsRouter.put("/edit/images/add/:postId", upload.array('files', 10), async (re
 interface fileContentInfoToDeleteType {
     fileContentInfoToDelete: object[]
 }
-
-//TODO: delete the files in a post
 
 // postsRouter.put("/edit/images/delete/:postId", async (req: express.Request, res: express.Response) => {
 //     const session = driver.session();
@@ -211,13 +184,12 @@ interface fileContentInfoToDeleteType {
 
 postsRouter.get("/:postId", async (req:express.Request, res: express.Response)=>{
     const session = driver.session();
-    const postId = req.params.postId;
-
+    const postId:string = req.params.postId;
     try{
         const postInfo = await session.run('MATCH (post:Posts {postId:$postId})' +
             'MATCH (post)-[c:COMMENT]->(comment)' +
             'RETURN { post: post,' +
-            'comments: collect(comment) } as postInfo', postId);
+            'comments: collect(comment) } as postInfo', {postId});
 
         res.status(200).json(postInfo.records[0].get('postInfo').properties);
     }

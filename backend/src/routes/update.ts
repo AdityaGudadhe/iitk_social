@@ -5,7 +5,7 @@ import cookieParser from "cookie-parser";
 import dotenv from 'dotenv';
 import multer from "multer";
 import path from "path";
-import {cloudinary, defaulDpUrl} from "../config/cloudinary";
+import {cloudinary, defaultDpUrl} from "../config/cloudinary";
 import fs from "fs";
 dotenv.config();
 
@@ -23,13 +23,14 @@ interface updateInfoType{
 
 const storage = multer.diskStorage({
     destination: (req:express.Request, file, callback)=>{
-        callback(null, "./uploads/");
+        const uploadPath: string = path.join(__dirname, "./uploads/")
+        callback(null, uploadPath);
     },
 
     filename: (req:express.Request, file, callback)=>{
         const sanitizedFilename:string = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
         const uniqueSuffix:string = Date.now().toString() + '-' + Math.round(Math.random() * 1e9).toString();
-        callback(null, file.fieldname + '-' + 'profile-pic' + uniqueSuffix + path.extname(sanitizedFilename));
+        callback(null, file.fieldname + '-' + uniqueSuffix + path.extname(sanitizedFilename));
     }
 })
 
@@ -39,13 +40,14 @@ updateRouter.put("/", async (req: express.Request, res: express.Response) => {
     const session = driver.session();
     const body:updateInfoType = req.body;
     const { info, infoType} = body;
+    console.log(infoType);
     try{
         const decodedCookie = jwt.verify(req.cookies.user, JWT_SECRET);
         //@ts-ignore
         const userId = decodedCookie.userId;
         try{
             const updateInfo = await session.run('MATCH (user:User {userId: $userId})' +
-                `SET user.${infoType} = $info` +
+                `SET user.${infoType} = $info ` +
                 'RETURN user',
                 {userId, info});
 
@@ -54,10 +56,12 @@ updateRouter.put("/", async (req: express.Request, res: express.Response) => {
             res.status(200).json({message: "bio updated successfully.", user: updateInfo.records[0].get('user').properties});
         }
         catch (e){
+            console.log(e);
             res.status(411).json(e);
         }
     }
     catch (e){
+        console.log(e);
         res.status(411).json(e);
     }
     finally {
@@ -67,11 +71,10 @@ updateRouter.put("/", async (req: express.Request, res: express.Response) => {
 
 updateRouter.put("/dpurl", upload.single('files'), async (req: express.Request, res: express.Response) => {
     const session = driver.session();
-    let newDpUrl:string = defaulDpUrl;
+    let newDpUrl:string = defaultDpUrl;
     if(req.file){
         const filePath = req.file.path;
         const result = await cloudinary.uploader.upload(filePath, {
-            format: "auto",
             resource_type: "auto"
         })
         newDpUrl = result.url;
@@ -83,13 +86,13 @@ updateRouter.put("/dpurl", upload.single('files'), async (req: express.Request, 
         const userId = decodedCookie.userId;
         try{
             const updateInfo = await session.run('MATCH (user:User {userId: $userId})' +
-                'SET user.dpUrl = $newDpUrl' +
+                'SET user.dpUrl = $newDpUrl ' +
                 'RETURN user',
                 {userId, newDpUrl});
 
             const token:string = jwt.sign(updateInfo.records[0].get('user').properties, JWT_SECRET);
             res.cookie('user', token);
-            res.status(200).json({message: "bio updated successfully.", user: updateInfo.records[0].get('user').properties});
+            res.status(200).json({message: "dp updated successfully.", user: updateInfo.records[0].get('user').properties});
         }
         catch (e){
             res.status(411).json(e);
