@@ -2,12 +2,12 @@ import express, {Router} from "express";
 import driver from "../db/init";
 import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
-import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import {Session} from "neo4j-driver";
-import {cloudinary, defaultCommunityDpUrl, defaultDpUrl} from "../config/cloudinary";
+import { defaultCommunityDpUrl } from "../config/cloudinary";
 import {createUploads, makeUniqueString, upload} from "../utils/utils";
-import fs from "fs";
+import {postPermissionCheck} from "../middlewares/community";
+import userRouter from "./user";
 dotenv.config();
 
 const app = express();
@@ -16,6 +16,10 @@ app.use(cookieParser());
 const communityRouter: Router = express.Router();
 
 const JWT_SECRET: string = process.env.JWT_SECRET || "default_jwt_secret";
+
+communityRouter.use('/post', async (req:express.Request, res:express.Response, next)=>{
+    await postPermissionCheck(req, res, next);
+})
 
 interface commInitialInputBodyType{
     name: string,
@@ -79,7 +83,6 @@ communityRouter.post('/post', upload.array('files', 10), async (req: express.Req
         const userId:string = decodedCookie.userId;
 
         try{
-            const canUserPostResult = await session.run('')
             const postId:string = "post_" + makeUniqueString();
             const post = await session.run('CREATE(post:Posts {' +
                 'postId: $postId,' +
@@ -129,6 +132,75 @@ communityRouter.put('/permissions/:communityId', async (req: express.Request, re
     }
 });
 
+communityRouter.put("/admin", async(req: express.Request, res: express.Response) => {
+    const session = driver.session();
+    const postId:string = req.params.postId;
+    try{
+        const decodedCookie = jwt.verify(req.cookies.user, JWT_SECRET);
+        //@ts-ignore
+        const userId:string = decodedCookie.userId;
+
+        try{
+            const doesExists = await session.run('MATCH (comm: Posts {postId: $postId})' +
+                'RETURN post', { postId });
+            if(doesExists.records.length===0){
+                throw new Error("Post with postId doesnt exist");
+            }
+        }
+        catch (err){
+            console.log(err);
+            res.status(401).json({message: "Post with postId doesnt exist"});
+        }
+
+        try{
+            const checkQuery:string = 'MATCH (user:User {userId:$userId})-[r:LIKED]->(post:Posts {postId: $postId})' +
+                'RETURN r';
+            const addQuery: string = 'MATCH (user:User {userId: $userId})' +
+                'MATCH (post:Posts {postId: $postId})' +
+                'MERGE (user)-[like:LIKED]->(post)' +
+                'SET like.time = datetime(),' +
+                'post.likeCount = post.likeCount + 1 RETURN post';
+            const deleteQuery:string = 'MATCH (user:User {userId:$userId})-[r:LIKED]->(post:Posts {postId: $postId})' +
+                'SET post.likeCount = post.likeCount - 1 DELETE r';
+
+
+            const isLiked = await session.run(checkQuery, {userId, postId});
+
+
+            if(isLiked.records.length > 0){
+                try{
+                    await session.run(deleteQuery, {userId, postId});
+                    res.status(200).json({message:"Like removed"});
+                }
+                catch(e){
+                    console.log(e);
+                    res.status(411).json({message:"error while removing like", e});
+                }
+            }
+            else{
+                try{
+                    await session.run(addQuery, {userId, postId});
+                    res.status(200).json({message:"Post liked"});
+                }
+                catch(e){
+                    console.log(e);
+                    res.status(411).json({message:"error while adding like", e});
+                }
+            }
+        }
+        catch(e){
+            console.log(e);
+            res.status(411).json({message:"error while checking like", e});
+        }
+    }
+    catch(e){
+        console.log(e);
+        res.status(411).json({message:"invalid secret or token", e});
+    }
+    finally {
+        await session.close();
+    }
+})
 
 
 export default communityRouter;
