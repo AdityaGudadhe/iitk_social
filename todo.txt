@@ -1,0 +1,20 @@
+1. endpoints to verify:
+    1. user signin (done)
+    2. user follow (done)
+    3. user like (done)
+    4. user get user
+
+    1. post post (done)
+    2. post edit text (done)
+    3. post add images (done)
+    4. post get post
+
+    1. update stuff (done)
+    2. update dpurl (done)
+
+
+Middlewares to make:
+1. does user exist
+2. validation
+3. does post exist
+4. does community exist
