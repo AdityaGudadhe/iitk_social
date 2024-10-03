@@ -6,6 +6,7 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
     cors : {
         origin : "*",
+        allowedHeaders : "Authorization",
         methods : ["GET", "POST"],
         credentials : true
     }
@@ -20,9 +21,10 @@ interface Message{
 
 io.on("connection", (socket)=>{
     // console.log("user connected");
-    const {userId} = socket.handshake.query;
-    console.log(userId);
-    // socket.join(userId);
+    const {userid} = socket.request.headers;
+    console.log(userid);
+    //@ts-ignore
+    socket.join(userid);
 
     socket.on("message", ({senderId, recipientId, message}:Message)=>{
         const room = io.sockets.adapter.rooms.get(recipientId);
