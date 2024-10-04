@@ -20,7 +20,6 @@ interface Message{
 
 
 io.on("connection", (socket)=>{
-    // console.log("user connected");
     const {userid} = socket.request.headers;
     console.log(userid);
     //@ts-ignore
@@ -28,12 +27,12 @@ io.on("connection", (socket)=>{
 
     socket.on("message", ({senderId, recipientId, message}:Message)=>{
         const room = io.sockets.adapter.rooms.get(recipientId);
-        const isRecipientOnline = room && room.size > 0;
-
+        const isRecipientOnline = (room && room.size > 0) || false;
         if (isRecipientOnline) {
-            io.to(recipientId).emit("message", {
+            io.to(recipientId).emit("receive_message", {
                 message,
                 senderId,
+                recipientId
             });
             console.log(`Message sent to user with ID ${recipientId}`);
         } else {
