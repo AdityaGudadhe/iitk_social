@@ -1,15 +1,19 @@
 import {useNavigate} from "react-router-dom";
 import {useSetRecoilState} from "recoil";
-import isLogged from "../store/atoms/isLogged.ts";
+import {isLogged, LoginInfo} from "../../store/atoms/isLogged.ts";
 import { signOut } from "firebase/auth";
-import {auth} from "../firebase/config.ts";
+import {auth} from "../../firebase/config.ts";
 
 export default function Signout(){
     const navigate = useNavigate();
     const setIsLogged = useSetRecoilState(isLogged);
+    const setLoginInfo = useSetRecoilState(LoginInfo);
     async function signoutHandler(){
         signOut(auth).then(()=>{
-            if(setIsLogged) setIsLogged(false);
+            if(setIsLogged) {
+                setIsLogged(false);
+                setLoginInfo(null);
+            }
             navigate('/')
         }).catch(err=>{
             console.log("error while signout:", err);

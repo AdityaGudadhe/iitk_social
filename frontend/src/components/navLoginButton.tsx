@@ -2,11 +2,13 @@ import { Link } from 'react-router-dom';
 import { auth } from "../firebase/config.ts";
 import NavProfile from "./navProfile.tsx";
 import {useRecoilValue} from "recoil";
-import isLogged from "../store/atoms/isLogged.ts";
+import {isLogged, LoginInfo} from "../store/atoms/isLogged.ts";
 
 export default function LoginButton(){
     const user = auth.currentUser ;
     const isLoggedIn = useRecoilValue(isLogged);
+    const loginInfo = useRecoilValue(LoginInfo);
+    console.log(loginInfo);
     const displayName = user ? user.displayName : null;
     const photoUrl = user ? user.photoURL : null;
     return (

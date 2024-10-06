@@ -3,7 +3,8 @@ import {BrowserRouter, Route, Routes} from "react-router-dom";
 import {SiteHeader} from "./components/header.tsx";
 import Login from "./components/auth/loginPage.tsx";
 import {RecoilRoot} from "recoil";
-import Signout from "./components/signoutPage.tsx";
+import Signout from "./components/auth/signoutPage.tsx";
+import Home from "./components/home.tsx";
 
 function App() {
   // const [count, setCount] = useState(0)
@@ -13,7 +14,7 @@ function App() {
           <BrowserRouter>
               <SiteHeader/>
               <Routes>
-                  <Route path="/"/>
+                  <Route path="/" element={<Home/>}/>
                   <Route path="signin" element={<Login/>}/>
                   <Route path={"signout"} element={<Signout/>}/>
               </Routes>

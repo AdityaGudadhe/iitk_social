@@ -2,16 +2,19 @@ import {useNavigate} from "react-router-dom";
 import { signInWithPopup } from "firebase/auth";
 import { auth, googleProvider} from "../../firebase/config.ts";
 import {useSetRecoilState} from "recoil";
-import isLogged from "../../store/atoms/isLogged.ts";
+import {isLogged, LoginInfo} from "../../store/atoms/isLogged.ts";
 
 export default function GoogleSignup() {
     const navigate = useNavigate();
     const setIsLogged = useSetRecoilState(isLogged);
+    const setLoginInfo = useSetRecoilState(LoginInfo);
     async function loginHandler(){
         try{
             const response = await signInWithPopup(auth, googleProvider);
+            const {uid, photoURL, email, displayName} = response.user;
             const token = await response.user.getIdToken();
             setIsLogged(true);
+            setLoginInfo({userId:uid, email, photoUrl:photoURL, displayName})
             localStorage.setItem("authorization", token);
             navigate('/');
         }
