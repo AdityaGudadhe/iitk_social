@@ -1,5 +1,5 @@
 export default function ChatHome(){
-    return <div className="z-10 content-center">
+    return <div className="content-center">
         yo
     </div>
 }

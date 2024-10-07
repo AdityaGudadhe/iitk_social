@@ -208,7 +208,6 @@ userRouter.get("/:userId", async (req: express.Request, res: express.Response)=>
     const userId:string = req.params.userId;
 
     try{
-
         const userInfo = await session.run('MATCH (user:User {userId: $userId})-[posted:POSTED]->(post)' +
             'MATCH (user)-[commented:COMMENTED]->(comment)' +
             'MATCH (comment)-[:PARENT]->(parent)' +
