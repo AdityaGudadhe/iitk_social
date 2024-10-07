@@ -1,15 +1,12 @@
 import express from "express";
 import {DefaultEventsMap, Server} from "socket.io";
 import {createServer} from "http";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { QueryCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import AWS from "aws-sdk";
+// import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+// import { QueryCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import {v7} from "uuid";
+import { db } from "./aws-config";
 
-
-import uuid from "uuid";
-
-
-const client = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(client);
 
 
 const app = express();
@@ -35,6 +32,7 @@ interface dbMessageSchema{
     recipientId : string,
     message : string,
     status : boolean,
+    roomId : string
 }
 
 function getRoomId(userId1 : string , userId2 : string ){
@@ -43,16 +41,46 @@ function getRoomId(userId1 : string , userId2 : string ){
     return temp[0] + "#" + temp[1];
 }
 
-function insertDbMessage(){
-
+function insertDbMessage({roomId, recipientId, senderId, message, messageId, status} : dbMessageSchema){
+    const params = {
+        TableName : "Messages",
+        Item : {
+            "roomId" : {
+                S : roomId
+            },
+            "messageId" : {
+                S : messageId
+            },
+            "message" : {
+                S : message
+            },
+            "senderId" : {
+                S : senderId
+            },
+            "recipientId" : {
+                S : recipientId
+            },
+            "status" : {
+                B: status
+            }
+        },
+        ReturnValues : "ALL_NEW"
+    }
+    try{
+        const response = db.putItem(params);
+        console.log(response);
+    }
+    catch (e) {
+        console.log(e);
+    }
 }
 
 function sendMessage(io:any, m : Message, status : boolean){
     const {recipientId, senderId, message} = m;
-    const messageId:string = uuid.v7();
+    const messageId:string = v7();
     const roomId :string = getRoomId(recipientId, senderId);
     const payload : dbMessageSchema = {
-        recipientId, senderId, message, messageId, status
+        roomId, recipientId, senderId, message, messageId, status
     };
     try{
         io.to(recipientId).emit("receive_message", {
@@ -60,7 +88,7 @@ function sendMessage(io:any, m : Message, status : boolean){
             senderId,
             recipientId
         });
-        insertDbMessage();
+        insertDbMessage(payload);
     }
     catch(e){
         console.log(e);
