@@ -1,13 +1,9 @@
 import express from "express";
-import {DefaultEventsMap, Server} from "socket.io";
-import {createServer} from "http";
-import AWS from "aws-sdk";
-// import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-// import { QueryCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import {v7} from "uuid";
-import { db } from "./aws-config";
-
-
+import {Server} from "socket.io";
+import { createServer } from "http";
+import { v7 } from "uuid";
+import { db } from "./firestore-config";
+import { collection, doc, getDoc, runTransaction } from "firebase/firestore";
 
 const app = express();
 const httpServer = createServer(app);
@@ -35,47 +31,74 @@ interface dbMessageSchema{
     roomId : string
 }
 
+function makeLL(){
+    const next = new Map();
+    const prev = new Map();
+
+    next.set('head', 'tail');
+    prev.set('tail', 'head');
+
+    return {next, prev};
+}
+
+
+function updateLL(next:any, prev:any, recipientId : string){
+    if(next.get(recipientId)!==undefined){
+        const prevElement = prev.get(recipientId);
+        const nextElement = next.get(recipientId);
+
+        next.set(prevElement, nextElement);
+        prev.set(nextElement, prevElement);
+    }
+    const currHead = next.get('head');
+    next.set('head', recipientId);
+    prev.set(recipientId, 'head');
+    next.set(recipientId, currHead);
+    prev.set(currHead, recipientId);
+}
+
+
 function getRoomId(userId1 : string , userId2 : string ){
     let temp = [userId1, userId2];
     temp.sort();
     return temp[0] + "#" + temp[1];
 }
 
-function insertDbMessage({roomId, recipientId, senderId, message, messageId, status} : dbMessageSchema){
-    const params = {
-        TableName : "Messages",
-        Item : {
-            "roomId" : {
-                S : roomId
-            },
-            "messageId" : {
-                S : messageId
-            },
-            "message" : {
-                S : message
-            },
-            "senderId" : {
-                S : senderId
-            },
-            "recipientId" : {
-                S : recipientId
-            },
-            "status" : {
-                B: status
-            }
-        },
-        ReturnValues : "ALL_NEW"
+
+
+async function insertDbMessage({roomId, recipientId, senderId, message, messageId, status} : dbMessageSchema){
+    const payload = {
+        messageId, recipientId, senderId, message, status, timestamp : new Date()
     }
     try{
-        const response = db.putItem(params);
-        console.log(response);
+        await runTransaction(db, async (transaction)=>{
+            const roomRef = doc(db, "Room", roomId);
+            const messageCollection = collection(roomRef,"Messages");
+            const documentRef = doc(messageCollection, messageId);
+            transaction.set(documentRef, payload);
+
+            const userRef = doc(db, "User", senderId);
+            const response = await transaction.get(userRef);
+            let next, prev;
+            if(response.data()?.next || response.data()?.prev){
+                const LL  = makeLL();
+                next = LL.next; prev = LL.prev;
+            }
+            else{
+                next = response.data()?.next;
+                prev = response.data()?.prev;
+            }
+            updateLL(next, prev, recipientId);
+            transaction.update(userRef, {next, prev});
+        })
     }
     catch (e) {
         console.log(e);
     }
 }
 
-function sendMessage(io:any, m : Message, status : boolean){
+
+async function sendMessage(io:any, m : Message, status : boolean){
     const {recipientId, senderId, message} = m;
     const messageId:string = v7();
     const roomId :string = getRoomId(recipientId, senderId);
@@ -88,7 +111,7 @@ function sendMessage(io:any, m : Message, status : boolean){
             senderId,
             recipientId
         });
-        insertDbMessage(payload);
+        await insertDbMessage(payload);
     }
     catch(e){
         console.log(e);
@@ -96,7 +119,13 @@ function sendMessage(io:any, m : Message, status : boolean){
 }
 
 
-io.on("connection", (socket)=>{
+io.on("connection", async (socket)=>{
+    const docRef = doc(db, "Contacts", "1");
+    const response = await getDoc(docRef);
+    if(response.data()!==undefined) {
+        //@ts-ignore
+        console.log(response.data().next);
+    }
     const {userid, recipientId} = socket.request.headers;
     console.log(`User: ${userid} connected with user: ${recipientId} `);
     //@ts-ignore
@@ -106,26 +135,20 @@ io.on("connection", (socket)=>{
 
 
 
-    socket.on("message", (m:Message)=>{
+    socket.on("message", async (m:Message)=>{
         const {recipientId} = m;
         const room = io.sockets.adapter.rooms.get(recipientId);
         const isRecipientOnline = (room && room.size > 0) || false;
 
-        // TODO : only keep one function call if dont need the console log
-        if (isRecipientOnline) {
-            sendMessage(io, m, isRecipientOnline);
-            console.log(`Message sent to user with ID ${recipientId}`);
-        } else {
-             sendMessage(io, m, isRecipientOnline);
-            console.log(`User with ID ${recipientId} is offline. Storing message for later.`);
-        }
+        await sendMessage(io, m, isRecipientOnline);
+
     })
 })
 
 
 app.use(express.json());
-app.get('/', (req: express.Request, res: express.Response) => {
-    res.send("Hello World!");
+app.get('/', async (req: express.Request, res: express.Response) => {
+    res.send("Hello World");
 });
 
 httpServer.listen(3050);
